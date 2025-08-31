@@ -20,9 +20,45 @@ const server = http.createServer(app);
 
 // Security middleware
 app.use(helmet());
+
+// Configure CORS with allowed origins
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://poll-hub-frontend.vercel.app',
+  'https://poll-hub-frontend.vercel.app',
+  'https://pollhub-backend-production.up.railway.app'
+];
+
+// Add environment variable if set
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL);
+}
+
+// Remove duplicates
+const uniqueOrigins = [...new Set(allowedOrigins)];
+
+console.log('Allowed CORS origins:', uniqueOrigins);
+
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' ? process.env.FRONTEND_URL || 'https://your-app.vercel.app' : 'http://localhost:3000',
-  credentials: true
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (uniqueOrigins.some(allowedOrigin => 
+      origin === allowedOrigin || 
+      origin.startsWith(allowedOrigin.replace('https://', 'http://'))
+    )) {
+      return callback(null, true);
+    }
+    
+    console.warn(`CORS blocked request from origin: ${origin}`);
+    return callback(new Error('Not allowed by CORS'), false);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+  maxAge: 86400 // 24 hours
 }));
 
 // Rate limiting removed to allow unlimited requests for development
