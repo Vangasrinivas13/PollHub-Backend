@@ -13,7 +13,7 @@ async function createAdmin() {
     console.log('Connected to MongoDB');
 
     // Check if admin already exists
-    const existingAdmin = await User.findOne({ email: 'admin@pollhub.com' });
+    const existingAdmin = await User.findOne({ email: 'MENTION_YOUR_ADMIN_MAIL_HERE' });
     if (existingAdmin) {
       console.log('Admin user already exists!');
       console.log('Email:', existingAdmin.email);
@@ -24,8 +24,8 @@ async function createAdmin() {
     // Create admin user
     const adminUser = new User({
       name: 'Admin User',
-      email: 'admin@pollhub.com',
-      password: 'admin123456', // Will be hashed automatically
+      email: 'MENTION_YOUR_ADMIN_MAIL_HERE',
+      password: 'MENTION_YOUR_ADMIN_PASSWORD_HERE', // Will be hashed automatically
       role: 'admin',
       isActive: true,
       emailVerified: true
@@ -34,9 +34,6 @@ async function createAdmin() {
     await adminUser.save();
     
     console.log('\n✅ Admin user created successfully!');
-    console.log('📧 Email: admin@pollhub.com');
-    console.log('🔑 Password: admin123456');
-    console.log('👤 Role: admin');
     console.log('\n🚀 You can now login to the admin dashboard!');
     
   } catch (error) {
