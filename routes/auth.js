@@ -1,10 +1,44 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const User = require('../models/User');
 const { authenticateToken } = require('../middleware/auth');
 const { validateUserRegistration, validateUserLogin } = require('../middleware/validation');
 
 const router = express.Router();
+
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'profile-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
 
 // Generate JWT token
 const generateToken = (userId) => {
@@ -235,6 +269,30 @@ router.post('/logout', authenticateToken, (req, res) => {
   // In a JWT implementation, logout is typically handled client-side by removing the token
   // We can log the logout event here if needed
   res.json({ message: 'Logout successful' });
+});
+
+// @route   POST /api/auth/upload-profile-picture
+// @desc    Upload profile picture
+// @access  Private
+router.post('/upload-profile-picture', authenticateToken, upload.single('profilePicture'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    const profilePicture = `/uploads/${req.file.filename}`;
+    
+    // Update user's profile picture in database
+    await User.findByIdAndUpdate(req.user._id, { profilePicture });
+
+    res.json({
+      message: 'Profile picture uploaded successfully',
+      profilePicture
+    });
+  } catch (error) {
+    console.error('Upload profile picture error:', error);
+    res.status(500).json({ message: 'Server error uploading profile picture' });
+  }
 });
 
 // @route   GET /api/auth/verify-token

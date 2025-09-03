@@ -164,6 +164,7 @@ router.get('/trending', async (req, res) => {
 // @access  Public/Private (optional auth)
 router.get('/:id', validateMongoId('id'), optionalAuth, async (req, res) => {
   try {
+    const { includeVoters } = req.query;
     const poll = await Poll.findById(req.params.id)
       .populate('createdBy', 'name email');
 
@@ -184,8 +185,29 @@ router.get('/:id', validateMongoId('id'), optionalAuth, async (req, res) => {
     
     // Add user-specific data if authenticated
     if (req.user) {
-      pollObj.hasUserVoted = poll.votedUsers.includes(req.user._id);
+      // Check if user has voted and get their vote details
+      const userVote = await Vote.findOne({
+        pollId: poll._id,
+        userId: req.user._id
+      });
+      
+      pollObj.hasUserVoted = !!userVote;
+      pollObj.userVote = userVote ? {
+        optionIndex: userVote.optionIndex,
+        optionText: userVote.optionText,
+        votedAt: userVote.createdAt
+      } : null;
+      
+      // Check if user can vote
       pollObj.canUserVote = poll.canUserVote(req.user._id);
+      
+      // If includeVoters is true, add voter information to each option
+      if (includeVoters === 'true' && req.user.role === 'admin') {
+        pollObj.options = poll.options.map(option => ({
+          ...option.toObject(),
+          voters: option.voters || []
+        }));
+      }
     }
 
     res.json({ poll: pollObj });

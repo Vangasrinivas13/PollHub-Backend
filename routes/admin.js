@@ -149,7 +149,7 @@ router.get('/users', authenticateToken, requireAdmin, validatePagination, async 
 });
 
 // @route   GET /api/admin/users/:id
-// @desc    Get user details
+// @desc    Get user details with complete profile information
 // @access  Private (Admin only)
 router.get('/users/:id', authenticateToken, requireAdmin, validateMongoId('id'), async (req, res) => {
   try {
@@ -177,11 +177,21 @@ router.get('/users/:id', authenticateToken, requireAdmin, validateMongoId('id'),
       lastLogin: user.lastLogin,
       loginAttempts: user.loginAttempts,
       isLocked: user.isLocked,
+      preferences: user.preferences,
       stats: user.getStats(),
       recentVotes: votingHistory.slice(0, 10).map(vote => ({
         pollTitle: vote.pollId.title,
         optionText: vote.optionText,
         votedAt: vote.createdAt
+      })),
+      fullVotingHistory: votingHistory.map(vote => ({
+        id: vote._id,
+        pollTitle: vote.pollId.title,
+        pollId: vote.pollId._id,
+        optionText: vote.optionText,
+        optionIndex: vote.optionIndex,
+        votedAt: vote.createdAt,
+        isAnonymous: vote.isAnonymous
       }))
     };
 
@@ -762,6 +772,52 @@ router.get('/real-time-stats', authenticateToken, requireAdmin, async (req, res)
   } catch (error) {
     console.error('Get real-time stats error:', error);
     res.status(500).json({ message: 'Server error fetching real-time stats' });
+  }
+});
+
+// @route   GET /api/admin/realtime-stats
+// @desc    Get real-time statistics for admin dashboard
+// @access  Private (Admin only)
+router.get('/realtime-stats', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const [
+      totalPolls,
+      totalVotes,
+      totalUsers,
+      activePolls,
+      recentVotes
+    ] = await Promise.all([
+      Poll.countDocuments(),
+      Vote.countDocuments(),
+      User.countDocuments(),
+      Poll.countDocuments({ endDate: { $gt: new Date() } }),
+      Vote.find()
+        .populate('pollId', 'title')
+        .populate('userId', 'name')
+        .sort({ createdAt: -1 })
+        .limit(5)
+    ]);
+
+    const completedPolls = totalPolls - activePolls;
+    const avgVotesPerPoll = totalPolls > 0 ? Math.round(totalVotes / totalPolls) : 0;
+
+    res.json({
+      totalPolls,
+      totalVotes,
+      totalUsers,
+      activePolls,
+      completedPolls,
+      avgVotesPerPoll,
+      recentVotes: recentVotes.map(vote => ({
+        id: vote._id,
+        pollTitle: vote.pollId?.title || 'Unknown Poll',
+        userName: vote.userId?.name || 'Anonymous',
+        createdAt: vote.createdAt
+      }))
+    });
+  } catch (error) {
+    console.error('Get realtime stats error:', error);
+    res.status(500).json({ message: 'Server error fetching realtime stats' });
   }
 });
 
