@@ -25,7 +25,6 @@ app.use(helmet());
 const allowedOrigins = [
   'http://localhost:3000',
   'https://poll-hub-frontend.vercel.app',
-  'https://poll-hub-frontend.vercel.app',
   'https://pollhub-backend-production.up.railway.app'
 ];
 
@@ -39,15 +38,24 @@ const uniqueOrigins = [...new Set(allowedOrigins)];
 
 console.log('Allowed CORS origins:', uniqueOrigins);
 
+// More permissive CORS configuration for Railway deployment
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    if (uniqueOrigins.some(allowedOrigin => 
-      origin === allowedOrigin || 
-      origin.startsWith(allowedOrigin.replace('https://', 'http://'))
-    )) {
+    // Check if origin is in allowed list
+    if (uniqueOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // Allow all Vercel deployments
+    if (origin && origin.includes('vercel.app')) {
+      return callback(null, true);
+    }
+    
+    // Allow Railway deployments
+    if (origin && origin.includes('railway.app')) {
       return callback(null, true);
     }
     
@@ -55,16 +63,46 @@ app.use(cors({
     return callback(new Error('Not allowed by CORS'), false);
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
-  maxAge: 86400 // 24 hours
+  maxAge: 86400, // 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 
 // Rate limiting removed to allow unlimited requests for development
 
 // Logging - disabled to reduce terminal output
 // app.use(morgan('combined'));
+
+// Additional CORS middleware to ensure headers are set on all responses
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  // Allow specific origins or all vercel/railway deployments
+  if (origin && (
+    uniqueOrigins.includes(origin) ||
+    origin.includes('vercel.app') ||
+    origin.includes('railway.app')
+  )) {
+    res.header('Access-Control-Allow-Origin', origin);
+  } else if (!origin) {
+    res.header('Access-Control-Allow-Origin', '*');
+  }
+  
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Max-Age', '86400');
+  
+  next();
+});
+
+// Handle preflight requests explicitly
+app.options('*', (req, res) => {
+  res.sendStatus(204);
+});
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
