@@ -36,7 +36,7 @@ if (process.env.FRONTEND_URL) {
 // Remove duplicates
 const uniqueOrigins = [...new Set(allowedOrigins)];
 
-console.log('Allowed CORS origins:', uniqueOrigins);
+// Note: Do not log allowed origins to avoid exposing configuration in logs
 
 // More permissive CORS configuration for Railway deployment
 app.use(cors({

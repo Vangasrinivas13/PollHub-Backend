@@ -170,13 +170,13 @@ router.get('/poll-performance', authenticateToken, requireAdmin, async (req, res
           voteCount: '$totalVotes',
           participationRate: {
             $multiply: [
-              { $divide: ['$totalVotes', { $ifNull: ['$uniqueVoters', { $max: ['$totalVotes', 1] }] }] },
+              { $divide: [{ $max: ['$totalVotes', 0] }, { $max: [{ $ifNull: ['$uniqueVoters', '$totalVotes'] }, 1] }] },
               100
             ]
           },
           daysActive: {
             $divide: [
-              { $subtract: [{ $min: ['$endDate', new Date()] }, '$createdAt'] },
+              { $max: [{ $subtract: [{ $min: ['$endDate', new Date()] }, '$createdAt'] }, 86400000] },
               86400000
             ]
           }
@@ -197,7 +197,7 @@ router.get('/poll-performance', authenticateToken, requireAdmin, async (req, res
           },
           votesPerDay: {
             $round: [
-              { $divide: ['$voteCount', { $max: ['$daysActive', 1] }] },
+              { $divide: [{ $max: ['$voteCount', 0] }, { $max: ['$daysActive', 1] }] },
               2
             ]
           }
@@ -391,6 +391,47 @@ router.get('/option-performance/:pollId', authenticateToken, requireAdmin, async
   } catch (error) {
     console.error('Option performance error:', error);
     res.status(500).json({ message: 'Failed to fetch option performance data' });
+  }
+});
+
+// Get completed polls leaderboard sorted by votes
+router.get('/completed-polls-leaderboard', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const completedPolls = await Poll.aggregate([
+      {
+        $match: {
+          endDate: { $lt: new Date() }, // Only completed polls
+          totalVotes: { $gt: 0 } // Only polls with votes
+        }
+      },
+      {
+        $project: {
+          title: 1,
+          description: 1,
+          totalVotes: 1,
+          uniqueVoters: 1,
+          createdAt: 1,
+          endDate: 1,
+          category: 1,
+          options: { $size: '$options' },
+          completedAt: '$endDate'
+        }
+      },
+      {
+        $sort: { totalVotes: -1, endDate: -1 } // Sort by votes (high to low), then by completion date
+      },
+      {
+        $limit: 50 // Top 50 completed polls
+      }
+    ]);
+
+    res.json({
+      leaderboard: completedPolls,
+      totalCompleted: completedPolls.length
+    });
+  } catch (error) {
+    console.error('Completed polls leaderboard error:', error);
+    res.status(500).json({ message: 'Failed to fetch completed polls leaderboard' });
   }
 });
 
